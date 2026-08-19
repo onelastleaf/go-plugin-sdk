@@ -66,13 +66,16 @@ func (plugin *Plugin) runSession(ctx context.Context, target string) error {
 	if first.ReplyTo != nil || hello == nil {
 		return ProtocolError{"HostHello must be the first host message"}
 	}
+	if first.SessionId == "" || first.PluginInstanceId == "" {
+		return ProtocolError{"HostHello envelope omitted its session or instance identity"}
+	}
 	if err := plugin.validateHello(hello); err != nil {
 		return err
 	}
 	if first.Trace.CallDepth > hello.MaximumCallDepth || first.Trace.CausalDepth > hello.MaximumCausalDepth {
 		return ProtocolError{"HostHello exceeds a negotiated trace depth limit"}
 	}
-	sender.identity(hello.SessionId, hello.PluginInstanceId)
+	sender.identity(first.SessionId, first.PluginInstanceId)
 	actions := make([]*protocol.ActionDescriptor, 0, len(plugin.actions))
 	for name, action := range plugin.actions {
 		actions = append(actions, &protocol.ActionDescriptor{Name: name, Description: action.description})
@@ -84,7 +87,7 @@ func (plugin *Plugin) runSession(ctx context.Context, target string) error {
 	}}}); err != nil {
 		return err
 	}
-	ready, err := receive(stream, &lastHostID, hello.SessionId, hello.PluginInstanceId, hello.MaximumCallDepth, hello.MaximumCausalDepth)
+	ready, err := receive(stream, &lastHostID, first.SessionId, first.PluginInstanceId, hello.MaximumCallDepth, hello.MaximumCausalDepth)
 	if err != nil {
 		return err
 	}
@@ -282,7 +285,7 @@ func validateEnvelope(envelope *protocol.PluginEnvelope, lastID *uint64, session
 
 func (plugin *Plugin) validateHello(hello *protocol.HostHello) error {
 	fingerprint, _ := hex.DecodeString(ProtocolSchemaSHA256)
-	if hello.Node == nil || hello.SessionId == "" || hello.PluginInstanceId == "" || !bytes.Equal(hello.ProtocolSchemaSha256, fingerprint) || hello.GetPluginId().GetValue() != plugin.id || hello.GetPluginName().GetValue() == "" || hello.MaximumCallDepth == 0 || hello.MaximumCausalDepth == 0 || hello.MaximumArtifactChunkBytes == 0 {
+	if hello.Node == nil || !bytes.Equal(hello.ProtocolSchemaSha256, fingerprint) || hello.GetPluginId().GetValue() != plugin.id || hello.GetPluginName().GetValue() == "" || hello.MaximumCallDepth == 0 || hello.MaximumCausalDepth == 0 || hello.MaximumArtifactChunkBytes == 0 {
 		return ProtocolError{"HostHello does not describe the expected plugin instance"}
 	}
 	return nil

@@ -9,9 +9,13 @@ The module path is `github.com/onelastleaf/go-plugin-sdk`. It requires Go 1.24 o
 
 ## Build and test the SDK
 
-From this repository:
+Clone the released SDK repository, then use the normal Go commands:
 
 ```sh
+git clone https://github.com/onelastleaf/go-plugin-sdk.git
+cd go-plugin-sdk
+git checkout v0.1.0
+
 go mod download
 go test ./...
 go test -race ./...
@@ -19,19 +23,6 @@ go build ./...
 ```
 
 The generated protobuf files are committed, so normal builds do not require `protoc` or a gRPC code generator.
-
-The `cmd/conformance` package is a test plugin used by oll's shared protocol suite. It is expected to fail if you run it directly because only oll supplies `OLL_PLUGIN_ENDPOINT`. To run the complete integration suite against a matching onelastleaf checkout:
-
-```sh
-go build -o /tmp/oll-go-sdk-conformance ./cmd/conformance
-
-cd /absolute/path/to/onelastleaf
-OLL_SDK_CONFORMANCE_PROGRAM=/tmp/oll-go-sdk-conformance \
-  cargo test --test plugin_sdk_conformance \
-  external_sdk_obeys_the_plugin_protocol -- --ignored --exact
-```
-
-The SDK and oll checkout must use the same protocol fingerprint. A mismatch is rejected during the handshake rather than papered over.
 
 ## Create a Go plugin
 
@@ -44,8 +35,21 @@ oll plugin new hello-plugin \
   --name hello-plugin
 
 cd hello-plugin
+go mod download
 go test ./...
 go build -o ./hello-plugin ./cmd/plugin
+```
+
+The generated `go.mod` pulls the tagged SDK release from GitHub:
+
+```go.mod
+require github.com/onelastleaf/go-plugin-sdk v0.1.0
+```
+
+For a project you created by hand, add the same remote dependency with:
+
+```sh
+go get github.com/onelastleaf/go-plugin-sdk@v0.1.0
 ```
 
 The generated project contains:
@@ -93,19 +97,6 @@ func main() {
 
 Keep the ID in the binary identical to `plugin.id` in `oll.toml`. The generated project already does this.
 
-### Use this checkout while developing
-
-`oll plugin new` pins the published SDK version. If you want the generated plugin to use your local SDK checkout instead, add a temporary Go module replacement:
-
-```sh
-go mod edit \
-  -replace github.com/onelastleaf/go-plugin-sdk=/absolute/path/to/go-plugin-sdk
-go mod tidy
-go test ./...
-```
-
-Use an absolute path if oll will build the plugin on this same machine: installation happens in a private Git checkout, so a relative replacement will point somewhere else. Remove the replacement before publishing the plugin.
-
 ## How oll starts the plugin
 
 The generated `oll.toml` is both the build recipe and the runtime declaration. For the example above it looks like this:
@@ -116,14 +107,16 @@ format_version = 1
 [plugin]
 id = "dev.example.hello"
 name = "hello-plugin"
-protocol_fingerprint = "21c145638fbe6a1f2d9a2cb2114403d4bee4da3c0adbac09e805a98a77d0d4da"
+protocol_fingerprint = "9b236b37455965858413f5717a88e28568a459e81e87a28ff77be8845bcff75a"
 
-[[source.dependencies]]
-executable = "go"
-hint = "Install Go and ensure go is in PATH."
+[source]
+checkout = "source"
+steps = [
+  ["go", "build", "-o", "{install}/hello-plugin", "./cmd/plugin"],
+]
 
-[[source.steps]]
-argv = ["go", "build", "-o", "{install}/hello-plugin", "./cmd/plugin"]
+[source.dependencies]
+"go" = "Install Go and ensure go is in PATH."
 
 [runtime]
 argv = ["{install}/hello-plugin"]
@@ -140,14 +133,17 @@ When the plugin is started, oll:
 
 ## Install, start, and call it
 
-These commands assume the `oll` CLI is connected to a running onelastleaf node. oll installs source plugins from Git, so commit the generated project and then give `plugin install` a Git remote. A local `file://` remote is handy while experimenting:
+These commands assume the `oll` CLI is connected to a running onelastleaf node. oll installs source plugins from Git, so commit the generated project, push it to a remote repository, and give that remote to `plugin install`:
 
 ```sh
 git init
 git add .
 git commit -m "Add hello plugin"
+git branch -M main
+git remote add origin https://github.com/your-org/hello-plugin.git
+git push -u origin main
 
-oll plugin install file:///absolute/path/to/hello-plugin --source
+oll plugin install https://github.com/your-org/hello-plugin.git --source
 oll plugin start dev.example.hello
 oll plugin call dev.example.hello echo -- hello from Go
 ```
@@ -159,9 +155,12 @@ oll job info <job-id>
 oll plugin log dev.example.hello
 ```
 
-After changing and committing the plugin, publish the new source generation with:
+After changing the plugin, push the commit before asking oll to fetch the new source generation:
 
 ```sh
+git add .
+git commit -m "Update hello plugin"
+git push
 oll plugin update dev.example.hello
 oll plugin restart dev.example.hello
 ```

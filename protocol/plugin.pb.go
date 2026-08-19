@@ -126,8 +126,6 @@ func (JobCancellationReason) EnumDescriptor() ([]byte, []int) {
 type HostHello struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	Node                      *NodeIdentity          `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	SessionId                 string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	PluginInstanceId          string                 `protobuf:"bytes,3,opt,name=plugin_instance_id,json=pluginInstanceId,proto3" json:"plugin_instance_id,omitempty"`
 	ProtocolSchemaSha256      []byte                 `protobuf:"bytes,4,opt,name=protocol_schema_sha256,json=protocolSchemaSha256,proto3" json:"protocol_schema_sha256,omitempty"`
 	MaximumCallDepth          uint32                 `protobuf:"varint,5,opt,name=maximum_call_depth,json=maximumCallDepth,proto3" json:"maximum_call_depth,omitempty"`
 	MaximumCausalDepth        uint32                 `protobuf:"varint,6,opt,name=maximum_causal_depth,json=maximumCausalDepth,proto3" json:"maximum_causal_depth,omitempty"`
@@ -173,20 +171,6 @@ func (x *HostHello) GetNode() *NodeIdentity {
 		return x.Node
 	}
 	return nil
-}
-
-func (x *HostHello) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
-	}
-	return ""
-}
-
-func (x *HostHello) GetPluginInstanceId() string {
-	if x != nil {
-		return x.PluginInstanceId
-	}
-	return ""
 }
 
 func (x *HostHello) GetProtocolSchemaSha256() []byte {
@@ -2062,19 +2046,17 @@ var File_oll_plugin_proto protoreflect.FileDescriptor
 
 const file_oll_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x10oll/plugin.proto\x12\foll.protocol\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x10oll/common.proto\x1a\x10oll/config.proto\x1a\x12oll/document.proto\"\xcf\x03\n" +
+	"\x10oll/plugin.proto\x12\foll.protocol\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x10oll/common.proto\x1a\x10oll/config.proto\x1a\x12oll/document.proto\"\xae\x03\n" +
 	"\tHostHello\x12.\n" +
-	"\x04node\x18\x01 \x01(\v2\x1a.oll.protocol.NodeIdentityR\x04node\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12,\n" +
-	"\x12plugin_instance_id\x18\x03 \x01(\tR\x10pluginInstanceId\x124\n" +
+	"\x04node\x18\x01 \x01(\v2\x1a.oll.protocol.NodeIdentityR\x04node\x124\n" +
 	"\x16protocol_schema_sha256\x18\x04 \x01(\fR\x14protocolSchemaSha256\x12,\n" +
 	"\x12maximum_call_depth\x18\x05 \x01(\rR\x10maximumCallDepth\x120\n" +
 	"\x14maximum_causal_depth\x18\x06 \x01(\rR\x12maximumCausalDepth\x12?\n" +
 	"\x1cmaximum_artifact_chunk_bytes\x18\a \x01(\x04R\x19maximumArtifactChunkBytes\x123\n" +
 	"\tplugin_id\x18\b \x01(\v2\x16.oll.protocol.PluginIdR\bpluginId\x129\n" +
 	"\vplugin_name\x18\t \x01(\v2\x18.oll.protocol.PluginNameR\n" +
-	"pluginName\"H\n" +
+	"pluginNameJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\n" +
+	"session_idR\x12plugin_instance_id\"H\n" +
 	"\x10ActionDescriptor\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\"\x94\x02\n" +
