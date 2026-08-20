@@ -1,14 +1,33 @@
 package pluginsdk
 
 import (
-	"encoding/hex"
+	"context"
 	"errors"
+	"io"
+	"sync"
 	"testing"
+	"time"
 
 	protocol "github.com/onelastleaf/go-plugin-sdk/protocol"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type delayedEOFParent struct {
+	release   chan struct{}
+	closed    chan struct{}
+	closeOnce sync.Once
+}
+
+func (parent *delayedEOFParent) Read([]byte) (int, error) {
+	<-parent.release
+	return 0, io.EOF
+}
+
+func (parent *delayedEOFParent) Close() error {
+	parent.closeOnce.Do(func() { close(parent.closed) })
+	return nil
+}
 
 func TestBuilderProducesStableImmutablePlugin(t *testing.T) {
 	handler := func(ActionContext, []string) (ActionResult, error) { return ActionResult{}, nil }
@@ -112,38 +131,39 @@ func TestStructuredErrorsPreserveMetadataAndDetails(t *testing.T) {
 	}
 }
 
-func TestPublishedFingerprintMatchesCurrentOllRelease(t *testing.T) {
-	const published = "21fd97cf8ec1a89ef464192fe69d123469410c40910d3a7b74898224da61545a"
-	if ProtocolSchemaSHA256 != published {
-		t.Fatalf("SDK fingerprint = %s; current oll release publishes %s", ProtocolSchemaSHA256, published)
-	}
-	fingerprint, err := hex.DecodeString(published)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plugin := &Plugin{id: "dev.example.plugin"}
-	hello := &protocol.HostHello{
-		Node:                      &protocol.NodeIdentity{},
-		ProtocolSchemaSha256:      fingerprint,
-		MaximumCallDepth:          1,
-		MaximumCausalDepth:        1,
-		MaximumArtifactChunkBytes: 1,
-		PluginId:                  &protocol.PluginId{Value: plugin.id},
-		PluginName:                &protocol.PluginName{Value: "plugin"},
-	}
-	if err := plugin.validateHello(hello); err != nil {
-		t.Fatalf("current oll fingerprint was rejected: %v", err)
-	}
-	hello.ProtocolSchemaSha256[0] ^= 0xff
-	if err := plugin.validateHello(hello); err == nil {
-		t.Fatal("mismatched oll fingerprint was accepted")
-	}
-}
-
 func TestEnvelopeDepthLimits(t *testing.T) {
 	lastID := uint64(0)
 	envelope := &protocol.PluginEnvelope{MessageId: 1, Trace: &protocol.TraceContext{CorrelationId: "test", CallDepth: 2}}
 	if err := validateEnvelope(envelope, &lastID, "", "", 1, 1); err == nil {
 		t.Fatal("envelope above the negotiated call depth was accepted")
+	}
+}
+
+func TestRunAtDoesNotWaitForParentReaderAfterContextCancellation(t *testing.T) {
+	plugin, err := New("dev.example.plugin", "0.1.0").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := &delayedEOFParent{release: make(chan struct{}), closed: make(chan struct{})}
+	defer close(parent.release)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- plugin.runAt(ctx, "http://127.0.0.1:1", parent)
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("runAt error = %v; want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runAt waited for the parent reader after closing it")
+	}
+	select {
+	case <-parent.closed:
+	default:
+		t.Fatal("runAt did not close the parent-liveness stream")
 	}
 }

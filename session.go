@@ -42,13 +42,11 @@ func (plugin *Plugin) runAt(ctx context.Context, endpoint string, parent io.Read
 	case <-ctx.Done():
 		cancelSession()
 		_ = parent.Close()
-		<-parentEOF
 		<-sessionDone
 		return ctx.Err()
 	case sessionErr := <-sessionDone:
 		cancelSession()
 		_ = parent.Close()
-		<-parentEOF
 		return sessionErr
 	}
 }
@@ -98,11 +96,10 @@ func (plugin *Plugin) runSession(ctx context.Context, target string) error {
 		actions = append(actions, proto.Clone(descriptor).(*protocol.ActionDescriptor))
 	}
 	if _, err := sender.send(nil, first.Trace, &protocol.PluginEnvelope{Payload: &protocol.PluginEnvelope_PluginHello{PluginHello: &protocol.PluginHello{
-		PluginId:             &protocol.PluginId{Value: plugin.id},
-		PluginName:           hello.PluginName,
-		ProtocolSchemaSha256: append([]byte(nil), protocolSchemaFingerprint...),
-		Actions:              actions,
-		PluginVersion:        plugin.version,
+		PluginId:      &protocol.PluginId{Value: plugin.id},
+		PluginName:    hello.PluginName,
+		Actions:       actions,
+		PluginVersion: plugin.version,
 	}}}); err != nil {
 		return err
 	}
