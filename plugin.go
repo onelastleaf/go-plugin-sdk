@@ -6,24 +6,27 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	protocol "github.com/onelastleaf/go-plugin-sdk/protocol"
-	"google.golang.org/protobuf/proto"
 )
 
-const ProtocolSchemaSHA256 = "9b236b37455965858413f5717a88e28568a459e81e87a28ff77be8845bcff75a"
-
+// ActionResult is the terminal value returned by an action. Artifacts must be
+// descriptors returned by ActionContext.StoreArtifact during the same action.
 type ActionResult struct {
 	Result    *protocol.ConfigValue
 	Artifacts []*protocol.ArtifactDescriptor
 }
 
+// StringResult constructs a successful action result containing a string.
 func StringResult(value string) ActionResult {
 	return ActionResult{Result: &protocol.ConfigValue{Kind: &protocol.ConfigValue_StringValue{StringValue: value}}}
 }
 
+// String returns the string value in the result, or an empty string when the
+// result does not contain a string.
 func (result ActionResult) String() string {
 	if result.Result == nil {
 		return ""
@@ -31,6 +34,8 @@ func (result ActionResult) String() string {
 	return result.Result.GetStringValue()
 }
 
+// ActionHandler handles one job. Handlers must return promptly after
+// ActionContext.Context is cancelled.
 type ActionHandler func(ActionContext, []string) (ActionResult, error)
 
 type action struct {
@@ -38,49 +43,91 @@ type action struct {
 	handler     ActionHandler
 }
 
-type Plugin struct {
+// Builder collects the actions exposed by a plugin. A builder is mutable and
+// must not be used concurrently.
+type Builder struct {
 	id      string
 	version string
 	actions map[string]action
 	err     error
 }
 
-func New(id, version string) *Plugin {
-	return &Plugin{id: id, version: version, actions: make(map[string]action)}
+// Plugin is an immutable, built plugin runtime. A Plugin may be run once.
+type Plugin struct {
+	id                string
+	version           string
+	actions           map[string]action
+	actionDescriptors []*protocol.ActionDescriptor
+	runStarted        atomic.Bool
 }
 
-func (plugin *Plugin) Action(name, description string, handler ActionHandler) *Plugin {
-	if plugin.err != nil {
-		return plugin
+// New starts building a plugin with an immutable publisher ID and an
+// informational version string.
+func New(id, version string) *Builder {
+	return &Builder{id: id, version: version, actions: make(map[string]action)}
+}
+
+// Action registers a named action. Registration errors are returned by Build
+// so calls can be chained.
+func (builder *Builder) Action(name, description string, handler ActionHandler) *Builder {
+	if builder.err != nil {
+		return builder
 	}
 	if name == "" || handler == nil {
-		plugin.err = errors.New("action name and handler are required")
-		return plugin
+		builder.err = errors.New("action name and handler are required")
+		return builder
 	}
-	if _, exists := plugin.actions[name]; exists {
-		plugin.err = fmt.Errorf("duplicate action %q", name)
-		return plugin
+	if _, exists := builder.actions[name]; exists {
+		builder.err = fmt.Errorf("duplicate action %q", name)
+		return builder
 	}
-	plugin.actions[name] = action{description: description, handler: handler}
-	return plugin
+	builder.actions[name] = action{description: description, handler: handler}
+	return builder
 }
 
-func (plugin *Plugin) Build() (*Plugin, error) {
-	if plugin.err != nil {
-		return nil, plugin.err
+// Build validates the plugin definition and returns an immutable runtime.
+func (builder *Builder) Build() (*Plugin, error) {
+	if builder.err != nil {
+		return nil, builder.err
 	}
-	if err := validatePluginID(plugin.id); err != nil {
+	if err := validatePluginID(builder.id); err != nil {
 		return nil, err
 	}
-	if plugin.version == "" {
+	if builder.version == "" {
 		return nil, errors.New("plugin version must not be empty")
 	}
-	return plugin, nil
+
+	actions := make(map[string]action, len(builder.actions))
+	names := make([]string, 0, len(builder.actions))
+	for name, registered := range builder.actions {
+		actions[name] = registered
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	descriptors := make([]*protocol.ActionDescriptor, 0, len(names))
+	for _, name := range names {
+		descriptors = append(descriptors, &protocol.ActionDescriptor{
+			Name:        name,
+			Description: actions[name].description,
+		})
+	}
+
+	return &Plugin{
+		id:                builder.id,
+		version:           builder.version,
+		actions:           actions,
+		actionDescriptors: descriptors,
+	}, nil
 }
 
+// Run connects the plugin to the oll endpoint in OLL_PLUGIN_ENDPOINT and
+// serves jobs until the session ends. A built plugin can only be run once.
 func (plugin *Plugin) Run(ctx context.Context) error {
-	if _, err := plugin.Build(); err != nil {
-		return err
+	if plugin == nil {
+		return errors.New("plugin must not be nil")
+	}
+	if !plugin.runStarted.CompareAndSwap(false, true) {
+		return errors.New("plugin runtime may only be run once")
 	}
 	endpoint, ok := os.LookupEnv("OLL_PLUGIN_ENDPOINT")
 	if !ok {
@@ -108,88 +155,4 @@ func validatePluginID(value string) error {
 		}
 	}
 	return nil
-}
-
-type cancellation struct {
-	ctx context.Context
-}
-
-func (value cancellation) Context() context.Context { return value.ctx }
-func (value cancellation) Done() <-chan struct{}    { return value.ctx.Done() }
-
-type ActionContext interface {
-	Context() context.Context
-	JobID() string
-	Trace() *protocol.TraceContext
-	Host() *Host
-	HostCall(*protocol.HostCallRequest) (*protocol.HostCallResponse, error)
-	GetConfig(*protocol.ConfigPath) (*protocol.GetConfigResponse, error)
-	InvokeConfigFunction(*protocol.ConfigFunctionRef, []*protocol.ConfigValue) (*protocol.InvokeConfigFunctionResponse, error)
-}
-
-type actionContext struct {
-	ctx          context.Context
-	jobID        string
-	trace        *protocol.TraceContext
-	parentCallID uint64
-	host         *Host
-}
-
-func (value *actionContext) Context() context.Context      { return value.ctx }
-func (value *actionContext) JobID() string                 { return value.jobID }
-func (value *actionContext) Trace() *protocol.TraceContext { return cloneTrace(value.trace) }
-func (value *actionContext) Host() *Host                   { return value.host }
-
-func (value *actionContext) nestedTrace() (*protocol.TraceContext, error) {
-	trace := cloneTrace(value.trace)
-	trace.ParentCallId = ref(value.parentCallID)
-	if trace.CallDepth == ^uint32(0) {
-		return nil, errors.New("host-call depth overflowed")
-	}
-	trace.CallDepth++
-	if trace.CallDepth > value.host.maximumCallDepth {
-		return nil, errors.New("host call exceeds the negotiated call-depth limit")
-	}
-	return trace, nil
-}
-
-func (value *actionContext) HostCall(request *protocol.HostCallRequest) (*protocol.HostCallResponse, error) {
-	trace, err := value.nestedTrace()
-	if err != nil {
-		return nil, err
-	}
-	return value.host.Call(value.ctx, trace, request)
-}
-
-func (value *actionContext) GetConfig(path *protocol.ConfigPath) (*protocol.GetConfigResponse, error) {
-	trace, err := value.nestedTrace()
-	if err != nil {
-		return nil, err
-	}
-	return value.host.GetConfig(value.ctx, trace, path)
-}
-
-func (value *actionContext) InvokeConfigFunction(function *protocol.ConfigFunctionRef, arguments []*protocol.ConfigValue) (*protocol.InvokeConfigFunctionResponse, error) {
-	trace, err := value.nestedTrace()
-	if err != nil {
-		return nil, err
-	}
-	return value.host.InvokeConfigFunction(value.ctx, trace, function, arguments)
-}
-
-func cloneTrace(value *protocol.TraceContext) *protocol.TraceContext {
-	if value == nil {
-		return nil
-	}
-	return proto.Clone(value).(*protocol.TraceContext)
-}
-
-type activeJob struct {
-	cancel context.CancelFunc
-	done   <-chan struct{}
-}
-
-type jobSet struct {
-	mu   sync.Mutex
-	jobs map[string]activeJob
 }

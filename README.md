@@ -107,7 +107,7 @@ format_version = 1
 [plugin]
 id = "dev.example.hello"
 name = "hello-plugin"
-protocol_fingerprint = "9b236b37455965858413f5717a88e28568a459e81e87a28ff77be8845bcff75a"
+protocol_fingerprint = "21fd97cf8ec1a89ef464192fe69d123469410c40910d3a7b74898224da61545a"
 
 [source]
 checkout = "source"
@@ -179,9 +179,59 @@ oll plugin stop dev.example.hello
 - `JobID()` and `Trace()` for job and tracing metadata;
 - `GetConfig(...)` and `InvokeConfigFunction(...)` for oll-owned plugin configuration;
 - `HostCall(...)` for other permitted host capabilities; and
-- `Host().Log(...)` and `Host().StoreArtifact(...)` for structured logs and verified artifacts.
+- `Log(...)` and `StoreArtifact(...)` for structured logs and verified artifacts.
 
 Pass `action.Context()` to blocking work and return promptly when it is cancelled. A plugin may run several jobs at once, so avoid global mutable state unless you protect it yourself.
+
+The SDK fills in the parent call ID and trace depth for nested host calls, while
+job-scoped logs and artifact messages keep the job trace unchanged. It does not
+expose a raw host client, so an action cannot accidentally construct either
+trace incorrectly.
+
+### Return a useful error
+
+An ordinary Go error becomes an internal job failure. When the caller can act
+on the error, return `ActionError` instead:
+
+```go
+return plugin.ActionResult{}, &plugin.ActionError{
+    Code:     protocol.ErrorCode_ERROR_CODE_INVALID_ARGUMENT,
+    Message:  "the input path is empty",
+    Metadata: map[string]string{"argument": "path"},
+}
+```
+
+Errors returned by oll can be matched with `errors.As` as `*plugin.HostError`.
+Its `Code()`, `Retryable()`, and `Detail()` methods preserve the complete
+structured error, including metadata and protobuf `Any` details.
+
+### Store an artifact without loading it into memory
+
+Give `StoreArtifact` an `io.ReadSeeker`. The SDK reads it twice: once to compute
+the size and SHA-256, then again to stream bounded chunks. Include only the
+descriptor returned by `StoreArtifact` in the action result:
+
+```go
+file, err := os.Open("report.json")
+if err != nil {
+    return plugin.ActionResult{}, err
+}
+defer file.Close()
+
+artifact, err := action.StoreArtifact(plugin.ArtifactInput{
+    ID:        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    FileName:  "report.json",
+    MediaType: "application/json",
+    Source:    file,
+})
+if err != nil {
+    return plugin.ActionResult{}, err
+}
+return plugin.ActionResult{Artifacts: []*protocol.ArtifactDescriptor{artifact}}, nil
+```
+
+Artifact IDs are canonical UUID v4 strings. File names must be safe base names,
+and the source must still contain the same bytes on the second read.
 
 For the packaging format, lifecycle, and CLI behavior, see the onelastleaf documentation for [plugin SDKs](https://github.com/onelastleaf/onelastleaf/blob/main/docs/plugin-sdk.md), [plugin packaging](https://github.com/onelastleaf/onelastleaf/blob/main/docs/plugin-packaging.md), and the [plugin system](https://github.com/onelastleaf/onelastleaf/blob/main/docs/plugin-system.md).
 
@@ -191,3 +241,23 @@ For the packaging format, lifecycle, and CLI behavior, see the onelastleaf docum
 - **Protocol fingerprint mismatch** — the SDK release, `oll.toml`, and oll binary do not describe the same protocol revision. Regenerate the project or update them together.
 - **An update did not pick up local edits** — oll installs committed Git state, not uncommitted files. Commit the change before `oll plugin update`.
 - **A call returned only a job ID** — that is normal. Read the eventual result with `oll job info <job-id>`.
+
+## Updating the protocol bindings
+
+Released plugins do not need protobuf tools. This section is only for SDK
+maintainers updating the SDK alongside an oll protocol release.
+
+Install exactly `protoc` 31.1, `protoc-gen-go` 1.36.9, and
+`protoc-gen-go-grpc` 1.5.1. Then pass a clean onelastleaf checkout and the
+fingerprint published by that oll build:
+
+```sh
+./scripts/update-protocol.sh \
+  /path/to/onelastleaf \
+  21fd97cf8ec1a89ef464192fe69d123469410c40910d3a7b74898224da61545a
+```
+
+The script verifies the published value against oll's complete canonical
+descriptor set before it copies the four plugin protocol sources, regenerates
+the Go bindings, and updates the SDK constant. Review and commit all of those
+changes together.

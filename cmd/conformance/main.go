@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"log"
 	"strings"
@@ -61,23 +61,20 @@ func hostCalls(action plugin.ActionContext, _ []string) (plugin.ActionResult, er
 		return plugin.ActionResult{}, err
 	}
 	content := document.GetReadDocument().GetDocument().GetContent()
-	if err := action.Host().Log(action.Trace(), protocol.LogLevel_LOG_LEVEL_INFO, "conformance", "host action complete", nil); err != nil {
+	if err := action.Log(protocol.LogLevel_LOG_LEVEL_INFO, "conformance", "host action complete", nil); err != nil {
 		return plugin.ActionResult{}, err
 	}
 	return plugin.StringResult(invoked.Results[0].GetStringValue() + "|" + content), nil
 }
 
 func artifact(action plugin.ActionContext, _ []string) (plugin.ActionResult, error) {
-	chunks := [][]byte{[]byte("artifact "), []byte("payload")}
-	digest := sha256.Sum256([]byte("artifact payload"))
-	descriptor := &protocol.ArtifactDescriptor{
-		ArtifactId: &protocol.PluginArtifactId{Value: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
-		FileName:   "conformance.txt",
-		MediaType:  "text/plain",
-		SizeBytes:  16,
-		Sha256:     digest[:],
-	}
-	if _, err := action.Host().StoreArtifact(action.Context(), action.Trace(), action.JobID(), descriptor, chunks); err != nil {
+	descriptor, err := action.StoreArtifact(plugin.ArtifactInput{
+		ID:        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		FileName:  "conformance.txt",
+		MediaType: "text/plain",
+		Source:    bytes.NewReader([]byte("artifact payload")),
+	})
+	if err != nil {
 		return plugin.ActionResult{}, err
 	}
 	return plugin.ActionResult{Result: stringValue("artifact"), Artifacts: []*protocol.ArtifactDescriptor{descriptor}}, nil
