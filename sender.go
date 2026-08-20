@@ -7,10 +7,7 @@ import (
 	"sync"
 
 	protocol "github.com/onelastleaf/go-plugin-sdk/protocol"
-	"google.golang.org/protobuf/proto"
 )
-
-var errEnvelopeTooLarge = errors.New("plugin envelope exceeds the 64 MiB limit")
 
 type pluginStream interface {
 	Send(*protocol.PluginEnvelope) error
@@ -84,9 +81,6 @@ func (sender *envelopeSender) sendRegistered(
 	envelope.SessionId = sender.sessionID
 	envelope.PluginInstanceId = sender.instanceID
 	envelope.Trace = cloneTrace(trace)
-	if proto.Size(envelope) > maximumEnvelopeBytes {
-		return messageID, errEnvelopeTooLarge
-	}
 	if beforeSend != nil {
 		// Registration and Send share this lock, so a fast host response cannot
 		// arrive before its waiter is visible to the receive loop.

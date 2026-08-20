@@ -192,22 +192,6 @@ func TestActionContextIsCancelledAfterNormalCompletion(t *testing.T) {
 	}
 }
 
-func TestOversizedTerminalResultBecomesSmallFailure(t *testing.T) {
-	stream := newFakePluginStream()
-	sender := newEnvelopeSender(stream)
-	job := &activeJob{jobID: &protocol.PluginJobId{Value: testJobID(1)}, trace: &protocol.TraceContext{CorrelationId: "trace"}}
-	result := ActionResult{Result: stringConfigValue(strings.Repeat("x", maximumEnvelopeBytes))}
-	if err := sendTerminalJobUpdate(sender, job, result, nil); err != nil {
-		t.Fatal(err)
-	}
-	envelope := nextSent(t, stream)
-	update := envelope.GetJobUpdate()
-	if update == nil || update.State != protocol.JobState_JOB_STATE_FAILED || update.GetError().GetCode() != protocol.ErrorCode_ERROR_CODE_PAYLOAD_TOO_LARGE {
-		t.Fatalf("fallback update = %v", update)
-	}
-	assertNoSent(t, stream, 20*time.Millisecond)
-}
-
 func TestActionPanicFailsOnlyThatJobAndLogsStack(t *testing.T) {
 	plugin := mustTestPlugin(t, map[string]ActionHandler{
 		"panic": func(ActionContext, []string) (ActionResult, error) { panic("boom") },

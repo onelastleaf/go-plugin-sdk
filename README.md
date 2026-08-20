@@ -130,6 +130,12 @@ When the plugin is started, oll:
 
 `runtime.Run(...)` connects to that endpoint as a gRPC client and stays connected until oll requests shutdown, the parent disappears, the context is cancelled, or the session fails. Do not use stdin for application input, and do not hard-code or expose a listening port in your plugin.
 
+The protocol does not impose an encoded-size limit on ordinary envelopes. The
+SDK raises gRPC's send and receive settings to the largest value Go supports,
+so the practical bound comes from grpc-go, the platform, and available memory
+rather than gRPC's smaller default. Artifact data is still streamed in chunks
+no larger than the size advertised by oll in `HostHello`.
+
 ## Install, start, and call it
 
 These commands assume the `oll` CLI is connected to a running onelastleaf node. oll installs source plugins from Git, so commit the generated project, push it to a remote repository, and give that remote to `plugin install`:

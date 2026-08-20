@@ -257,18 +257,6 @@ func sendTerminalJobUpdate(sender *envelopeSender, job *activeJob, result Action
 		update.Error = actionProtocolError(actionErr)
 	}
 	_, err := sender.send(nil, job.trace, &protocol.PluginEnvelope{Payload: &protocol.PluginEnvelope_JobUpdate{JobUpdate: update}})
-	if !errors.Is(err, errEnvelopeTooLarge) {
-		return err
-	}
-	fallback := &protocol.JobUpdate{
-		JobId: job.jobID,
-		State: protocol.JobState_JOB_STATE_FAILED,
-		Error: &protocol.ProtocolError{
-			Code:    protocol.ErrorCode_ERROR_CODE_PAYLOAD_TOO_LARGE,
-			Message: "action result exceeds the 64 MiB protocol limit",
-		},
-	}
-	_, err = sender.send(nil, job.trace, &protocol.PluginEnvelope{Payload: &protocol.PluginEnvelope_JobUpdate{JobUpdate: fallback}})
 	return err
 }
 

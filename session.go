@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	protocol "github.com/onelastleaf/go-plugin-sdk/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
-
-const maximumEnvelopeBytes = 64 * 1024 * 1024
 
 func (plugin *Plugin) runAt(ctx context.Context, endpoint string, parent io.ReadCloser) error {
 	if parent == nil {
@@ -56,8 +55,8 @@ func (plugin *Plugin) runSession(ctx context.Context, target string) error {
 		target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(maximumEnvelopeBytes),
-			grpc.MaxCallSendMsgSize(maximumEnvelopeBytes),
+			grpc.MaxCallRecvMsgSize(math.MaxInt),
+			grpc.MaxCallSendMsgSize(math.MaxInt),
 		),
 	)
 	if err != nil {

@@ -2,12 +2,26 @@ package pluginsdk
 
 import (
 	"errors"
+	"io"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
 	protocol "github.com/onelastleaf/go-plugin-sdk/protocol"
 )
+
+type retainingPluginStream struct {
+	sent *protocol.PluginEnvelope
+}
+
+func (stream *retainingPluginStream) Send(envelope *protocol.PluginEnvelope) error {
+	stream.sent = envelope
+	return nil
+}
+
+func (*retainingPluginStream) Recv() (*protocol.PluginEnvelope, error) { return nil, io.EOF }
+func (*retainingPluginStream) CloseSend() error                        { return nil }
 
 func TestSenderReportsTransportFailure(t *testing.T) {
 	stream := newFakePluginStream()
@@ -28,24 +42,28 @@ func TestSenderReportsTransportFailure(t *testing.T) {
 	}
 }
 
-func TestSenderRejectsOversizedEnvelopeBeforeRegistration(t *testing.T) {
-	stream := newFakePluginStream()
+func TestSenderAllowsEnvelopeBeyondFormerProtocolLimit(t *testing.T) {
+	const formerEnvelopeLimit = 64 * 1024 * 1024
+
+	stream := &retainingPluginStream{}
 	sender := newEnvelopeSender(stream)
 	registered := false
-	_, err := sender.sendRegistered(nil, &protocol.TraceContext{CorrelationId: "trace"}, &protocol.PluginEnvelope{Payload: &protocol.PluginEnvelope_ArtifactChunk{ArtifactChunk: &protocol.ArtifactTransferChunk{
-		ArtifactId: &protocol.PluginArtifactId{Value: testJobID(1)},
-		Data:       make([]byte, maximumEnvelopeBytes),
-	}}}, func(uint64) error {
+	envelope := &protocol.PluginEnvelope{Payload: &protocol.PluginEnvelope_Log{Log: &protocol.LogRecord{
+		Message: strings.Repeat("x", formerEnvelopeLimit),
+	}}}
+	_, err := sender.sendRegistered(nil, &protocol.TraceContext{CorrelationId: "trace"}, envelope, func(uint64) error {
 		registered = true
 		return nil
 	})
-	if !errors.Is(err, errEnvelopeTooLarge) {
-		t.Fatalf("send error = %v; want errEnvelopeTooLarge", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if registered {
-		t.Fatal("oversized request was registered as pending")
+	if !registered {
+		t.Fatal("large request was not registered as pending")
 	}
-	assertNoSent(t, stream, 20*time.Millisecond)
+	if stream.sent != envelope {
+		t.Fatal("large envelope was not sent")
+	}
 }
 
 func TestSenderUsesMaximumMessageIDOnce(t *testing.T) {
