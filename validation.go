@@ -1,7 +1,6 @@
 package pluginsdk
 
 import (
-	"bytes"
 	"errors"
 	"net"
 	"net/url"
@@ -45,7 +44,6 @@ func (plugin *Plugin) validateHello(hello *protocol.HostHello) error {
 	if hello == nil || hello.Node == nil ||
 		!proto.Equal(hello.PluginId, &protocol.PluginId{Value: plugin.id}) ||
 		hello.GetPluginName().GetValue() == "" ||
-		!bytes.Equal(hello.ProtocolSchemaSha256, protocolSchemaFingerprint) ||
 		hello.MaximumCallDepth == 0 || hello.MaximumCausalDepth == 0 || hello.MaximumArtifactChunkBytes == 0 {
 		return ProtocolError{"HostHello does not describe the expected plugin instance"}
 	}

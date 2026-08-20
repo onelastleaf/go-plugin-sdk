@@ -107,7 +107,6 @@ format_version = 1
 [plugin]
 id = "dev.example.hello"
 name = "hello-plugin"
-protocol_fingerprint = "21fd97cf8ec1a89ef464192fe69d123469410c40910d3a7b74898224da61545a"
 
 [source]
 checkout = "source"
@@ -238,7 +237,6 @@ For the packaging format, lifecycle, and CLI behavior, see the onelastleaf docum
 ## Common surprises
 
 - **`OLL_PLUGIN_ENDPOINT is required`** — the binary was started by hand. Start an installed plugin with `oll plugin start` instead.
-- **Protocol fingerprint mismatch** — the SDK release, `oll.toml`, and oll binary do not describe the same protocol revision. Regenerate the project or update them together.
 - **An update did not pick up local edits** — oll installs committed Git state, not uncommitted files. Commit the change before `oll plugin update`.
 - **A call returned only a job ID** — that is normal. Read the eventual result with `oll job info <job-id>`.
 
@@ -248,16 +246,14 @@ Released plugins do not need protobuf tools. This section is only for SDK
 maintainers updating the SDK alongside an oll protocol release.
 
 Install exactly `protoc` 31.1, `protoc-gen-go` 1.36.9, and
-`protoc-gen-go-grpc` 1.5.1. Then pass a clean onelastleaf checkout and the
-fingerprint published by that oll build:
+`protoc-gen-go-grpc` 1.5.1. Copy `common.proto`, `config.proto`,
+`document.proto`, and `plugin.proto` from the canonical onelastleaf checkout,
+then regenerate the Go and gRPC bindings. Review and commit the protocol copies
+and generated bindings together.
 
-```sh
-./scripts/update-protocol.sh \
-  /path/to/onelastleaf \
-  21fd97cf8ec1a89ef464192fe69d123469410c40910d3a7b74898224da61545a
-```
-
-The script verifies the published value against oll's complete canonical
-descriptor set before it copies the four plugin protocol sources, regenerates
-the Go bindings, and updates the SDK constant. Review and commit all of those
-changes together.
+This SDK never computes, embeds, publishes, or compares a protobuf schema hash
+or fingerprint. Descriptor-wide hashes change for compatible additions and
+unrelated services, so they reject valid peers. Protocol changes instead
+preserve field numbers and wire types, give additions safe absent semantics,
+and tolerate unknown fields. Exact SDK pins provide reproducible builds; they
+are not protobuf API versioning.

@@ -126,12 +126,11 @@ func (JobCancellationReason) EnumDescriptor() ([]byte, []int) {
 type HostHello struct {
 	state                     protoimpl.MessageState `protogen:"open.v1"`
 	Node                      *NodeIdentity          `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
-	ProtocolSchemaSha256      []byte                 `protobuf:"bytes,4,opt,name=protocol_schema_sha256,json=protocolSchemaSha256,proto3" json:"protocol_schema_sha256,omitempty"`
-	MaximumCallDepth          uint32                 `protobuf:"varint,5,opt,name=maximum_call_depth,json=maximumCallDepth,proto3" json:"maximum_call_depth,omitempty"`
-	MaximumCausalDepth        uint32                 `protobuf:"varint,6,opt,name=maximum_causal_depth,json=maximumCausalDepth,proto3" json:"maximum_causal_depth,omitempty"`
-	MaximumArtifactChunkBytes uint64                 `protobuf:"varint,7,opt,name=maximum_artifact_chunk_bytes,json=maximumArtifactChunkBytes,proto3" json:"maximum_artifact_chunk_bytes,omitempty"`
-	PluginId                  *PluginId              `protobuf:"bytes,8,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
-	PluginName                *PluginName            `protobuf:"bytes,9,opt,name=plugin_name,json=pluginName,proto3" json:"plugin_name,omitempty"`
+	MaximumCallDepth          uint32                 `protobuf:"varint,2,opt,name=maximum_call_depth,json=maximumCallDepth,proto3" json:"maximum_call_depth,omitempty"`
+	MaximumCausalDepth        uint32                 `protobuf:"varint,3,opt,name=maximum_causal_depth,json=maximumCausalDepth,proto3" json:"maximum_causal_depth,omitempty"`
+	MaximumArtifactChunkBytes uint64                 `protobuf:"varint,4,opt,name=maximum_artifact_chunk_bytes,json=maximumArtifactChunkBytes,proto3" json:"maximum_artifact_chunk_bytes,omitempty"`
+	PluginId                  *PluginId              `protobuf:"bytes,5,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	PluginName                *PluginName            `protobuf:"bytes,6,opt,name=plugin_name,json=pluginName,proto3" json:"plugin_name,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -169,13 +168,6 @@ func (*HostHello) Descriptor() ([]byte, []int) {
 func (x *HostHello) GetNode() *NodeIdentity {
 	if x != nil {
 		return x.Node
-	}
-	return nil
-}
-
-func (x *HostHello) GetProtocolSchemaSha256() []byte {
-	if x != nil {
-		return x.ProtocolSchemaSha256
 	}
 	return nil
 }
@@ -268,13 +260,12 @@ func (x *ActionDescriptor) GetDescription() string {
 }
 
 type PluginHello struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	PluginId             *PluginId              `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
-	PluginName           *PluginName            `protobuf:"bytes,2,opt,name=plugin_name,json=pluginName,proto3" json:"plugin_name,omitempty"`
-	ProtocolSchemaSha256 []byte                 `protobuf:"bytes,3,opt,name=protocol_schema_sha256,json=protocolSchemaSha256,proto3" json:"protocol_schema_sha256,omitempty"`
-	Actions              []*ActionDescriptor    `protobuf:"bytes,4,rep,name=actions,proto3" json:"actions,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	PluginId   *PluginId              `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	PluginName *PluginName            `protobuf:"bytes,2,opt,name=plugin_name,json=pluginName,proto3" json:"plugin_name,omitempty"`
+	Actions    []*ActionDescriptor    `protobuf:"bytes,3,rep,name=actions,proto3" json:"actions,omitempty"`
 	// Informational build string only; package/release selection never parses it.
-	PluginVersion string `protobuf:"bytes,5,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
+	PluginVersion string `protobuf:"bytes,4,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -319,13 +310,6 @@ func (x *PluginHello) GetPluginId() *PluginId {
 func (x *PluginHello) GetPluginName() *PluginName {
 	if x != nil {
 		return x.PluginName
-	}
-	return nil
-}
-
-func (x *PluginHello) GetProtocolSchemaSha256() []byte {
-	if x != nil {
-		return x.ProtocolSchemaSha256
 	}
 	return nil
 }
@@ -2046,27 +2030,24 @@ var File_oll_plugin_proto protoreflect.FileDescriptor
 
 const file_oll_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x10oll/plugin.proto\x12\foll.protocol\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x10oll/common.proto\x1a\x10oll/config.proto\x1a\x12oll/document.proto\"\xae\x03\n" +
+	"\x10oll/plugin.proto\x12\foll.protocol\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x10oll/common.proto\x1a\x10oll/config.proto\x1a\x12oll/document.proto\"\xcc\x02\n" +
 	"\tHostHello\x12.\n" +
-	"\x04node\x18\x01 \x01(\v2\x1a.oll.protocol.NodeIdentityR\x04node\x124\n" +
-	"\x16protocol_schema_sha256\x18\x04 \x01(\fR\x14protocolSchemaSha256\x12,\n" +
-	"\x12maximum_call_depth\x18\x05 \x01(\rR\x10maximumCallDepth\x120\n" +
-	"\x14maximum_causal_depth\x18\x06 \x01(\rR\x12maximumCausalDepth\x12?\n" +
-	"\x1cmaximum_artifact_chunk_bytes\x18\a \x01(\x04R\x19maximumArtifactChunkBytes\x123\n" +
-	"\tplugin_id\x18\b \x01(\v2\x16.oll.protocol.PluginIdR\bpluginId\x129\n" +
-	"\vplugin_name\x18\t \x01(\v2\x18.oll.protocol.PluginNameR\n" +
-	"pluginNameJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04R\n" +
-	"session_idR\x12plugin_instance_id\"H\n" +
+	"\x04node\x18\x01 \x01(\v2\x1a.oll.protocol.NodeIdentityR\x04node\x12,\n" +
+	"\x12maximum_call_depth\x18\x02 \x01(\rR\x10maximumCallDepth\x120\n" +
+	"\x14maximum_causal_depth\x18\x03 \x01(\rR\x12maximumCausalDepth\x12?\n" +
+	"\x1cmaximum_artifact_chunk_bytes\x18\x04 \x01(\x04R\x19maximumArtifactChunkBytes\x123\n" +
+	"\tplugin_id\x18\x05 \x01(\v2\x16.oll.protocol.PluginIdR\bpluginId\x129\n" +
+	"\vplugin_name\x18\x06 \x01(\v2\x18.oll.protocol.PluginNameR\n" +
+	"pluginName\"H\n" +
 	"\x10ActionDescriptor\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\"\x94\x02\n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\"\xde\x01\n" +
 	"\vPluginHello\x123\n" +
 	"\tplugin_id\x18\x01 \x01(\v2\x16.oll.protocol.PluginIdR\bpluginId\x129\n" +
 	"\vplugin_name\x18\x02 \x01(\v2\x18.oll.protocol.PluginNameR\n" +
-	"pluginName\x124\n" +
-	"\x16protocol_schema_sha256\x18\x03 \x01(\fR\x14protocolSchemaSha256\x128\n" +
-	"\aactions\x18\x04 \x03(\v2\x1e.oll.protocol.ActionDescriptorR\aactions\x12%\n" +
-	"\x0eplugin_version\x18\x05 \x01(\tR\rpluginVersion\"\x0e\n" +
+	"pluginName\x128\n" +
+	"\aactions\x18\x03 \x03(\v2\x1e.oll.protocol.ActionDescriptorR\aactions\x12%\n" +
+	"\x0eplugin_version\x18\x04 \x01(\tR\rpluginVersion\"\x0e\n" +
 	"\fSessionReady\"H\n" +
 	"\x10ActionInvocation\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x1c\n" +
